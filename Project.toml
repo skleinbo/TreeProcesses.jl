@@ -1,0 +1,11 @@
+name = "TreeProcesses"
+uuid = "fe9c5e76-98a0-40b3-a46c-727041eeba4e"
+author = "Stephan Kleinboelting <s.kleinboelting@gmail.com>"
+version = "0.1.0"
+
+[deps]
+AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
+BinaryTrees = "b5b2f71e-4d2a-452d-9d2b-18613792c179"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"

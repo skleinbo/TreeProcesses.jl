@@ -4,14 +4,14 @@ export A!, C!, treevalues!, moran, moran2, birthdeath, fluctuating_coalescent, c
         maximally_balanced, maximally_unbalanced, to_mean_dataframe, yule
 
 import AbstractTrees
-import AbstractTrees: children, Leaves, nodevalue, parent, print_tree, PreOrderDFS, PostOrderDFS
-import Base: coalesce
+import AbstractTrees: children, descendleft, Leaves, nodevalue, parent, print_tree, PreOrderDFS, PostOrderDFS
+import Base: empty!
 using DataFrames
 using StatsBase
 
-# include("BinaryTrees.jl")
 using BinaryTrees
 
+include("utilities.jl")
 include("WeightedSamplers.jl")
 import .WeightedSamplers: WeightedSampler, sample, adjust_weight!, shorten!
 
@@ -35,18 +35,17 @@ function empty!(P::BinaryTree{Vector{T}}) where {T}
     nothing
 end
 
-function leftmostleaf(P::BinaryTree)
-    left = P
-    while !isnothing(left.left)
-        left = left.left
-    end
-    return left
-end
+"""
+    traverse_left_right!(P::BinaryTree{Vector}, i, agg)
 
+Traverse tree "in-order". Apply function `agg` to a node whenever
+it is ascended to from the right. Store result in i-th component of 
+that nodes value field.
+"""
 function traverse_left_right!(P::BinaryTree{Vector{Int}}, i, agg)
     ## Setup
     # 1. find left-most leaf
-    cursor = leftmostleaf(P)
+    cursor = descendleft(P)
     # 2. Set A=1
     cursor.val[i] = 1
     ## Start loop
@@ -64,7 +63,7 @@ function traverse_left_right!(P::BinaryTree{Vector{Int}}, i, agg)
         end
         cursor = p
         # 4. traverse to the leftmost leaf of the right subtree and start over
-        cursor = leftmostleaf(cursor.right)
+        cursor = descendleft(cursor.right)
         cursor.val[i] = 1
     end
 
@@ -88,12 +87,12 @@ Simulate the coalescent process for n genes.
 
 Return a directed graph with edges pointing towards the root.
 """
-function coalescent(n)
-    P = [BinaryTree([0, 0]) for _ in 1:n] # start with n vertices; store A,C
+function coalescent(n; default_value=[0,0])
+    P = [BinaryTree(copy(default_value)) for _ in 1:n] # start with n vertices; store A,C
     while n > 1
         i, j = sample(1:n, 2, replace=false, ordered=true) #sample two distinct vertices to coalesce
         @inbounds l, r = P[i], P[j]
-        v = BinaryTree([0, 0]) # newly added parental node
+        v = BinaryTree(copy(default_value)) # newly added parental node
         v.left = l # connect sampled nodes to parental node
         v.right = r
         l.parent = v
@@ -140,14 +139,14 @@ end
   At each time step a bifurcation event happens at any of the
   current tips with equal probability.
 """
-function yule(n)
-    P = [BinaryTree([0, 0])]
+function yule(n; default_value=[0,0])
+    P = [BinaryTree(copy(default_value))]
     k = 1
     while length(P) - k + 1 < n
         i = rand(k:lastindex(P))
         v = P[i]
-        l = left!(v, [0, 0])
-        r = right!(v, [0, 0])
+        l = left!(v, copy(default_value))
+        r = right!(v, copy(default_value))
         append!(P, (l, r))
         P[i] = P[k]
 
@@ -170,8 +169,8 @@ end
 
   Return an ancestral tree, or a vector of trees if the process hasn't coalesced.
 """
-function birthdeath(n, T, d, b=1.0; N=0)
-    P = [BinaryTree([0, 0]) for _ in 1:n]
+function birthdeath(n, T, d, b=1.0; N=0, default_value=[0,0])
+    P = [BinaryTree(copy(default_value)) for _ in 1:n]
     t = 1
     N > 0 && sizehint!(P, N)
     k = 1
@@ -180,8 +179,8 @@ function birthdeath(n, T, d, b=1.0; N=0)
         if rand() < b
             i = rand(k:lastindex(P))
             v = P[i]
-            l = left!(v, [0, 0])
-            r = right!(v, [0, 0])
+            l = left!(v, copy(default_value))
+            r = right!(v, copy(default_value))
             push!(P, r)
             P[i] = l
         end
@@ -221,18 +220,18 @@ end
 
   See also: @ref(`birth_death`)
 """
-moran2(n, T) = birthdeath(n, T, 1.0)
+moran2(n, T; kwargs...) = birthdeath(n, T, 1.0; kwargs...)
 
 """
   Return a fully imbalanced binary tree of given height.
 """
-function maximally_unbalanced(height)
-    P = BinaryTree([0, 0])
+function maximally_unbalanced(height; default_value=[0,0])
+    P = BinaryTree(copy(default_value))
     h = 0
     attach_to = P
     while h < height
-        right!(attach_to, [0, 0])
-        attach_to = left!(attach_to, [0,0])
+        right!(attach_to, copy(default_value))
+        attach_to = left!(attach_to, copy(default_value))
         h += 1
     end
 
@@ -242,28 +241,20 @@ end
 """
   Return a fully balanced binary tree of given height.
 """
-function maximally_balanced(height)
-    P = [BinaryTree([0, 0])]
+function maximally_balanced(height; default_value=[0,0])
+    P = [BinaryTree(copy(default_value))]
     root = P[1]
     h = 1
     n = 1
     while h < height
         attach_to = popfirst!(P)
-        push!(P, left!(attach_to, [0, 0]))
-        push!(P, right!(attach_to, [0, 0]))
+        push!(P, left!(attach_to, copy(default_value)))
+        push!(P, right!(attach_to, copy(default_value)))
 
         n += 2
         h = log2(n + 1)
     end
     return root
-end
-
-"""
-  Combine vectors with values for A and C into a dataframe, averaging C/A for every A.
-"""
-function to_mean_dataframe(A, C)
-    df = DataFrame(; A, C)
-    combine(groupby(df, :A), :A => mean => :a, [:A, :C] => ((a, c) -> mean(c ./ a)) => :covera)
 end
 
 """

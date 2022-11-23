@@ -13,7 +13,7 @@ using BinaryTrees
 
 include("utilities.jl")
 include("WeightedSamplers.jl")
-import .WeightedSamplers: WeightedSampler, sample, adjust_weight!, shorten!
+import .WeightedSamplers: WeightedSampler, sample, adjust_weight!
 
 "Distance between a node `i` and its ancestor `j` on a tree."
 function dist(i, j)
@@ -41,6 +41,8 @@ end
 Traverse tree "in-order". Apply function `agg` to a node whenever
 it is ascended to from the right. Store result in i-th component of 
 that nodes value field.
+
+Return number of nodes in tree.
 """
 function traverse_left_right!(P::BinaryTree{Vector{Int}}, i, agg)
     ## Setup
@@ -49,11 +51,14 @@ function traverse_left_right!(P::BinaryTree{Vector{Int}}, i, agg)
     # 2. Set A=1
     cursor.val[i] = 1
     ## Start loop
+    ## count nodes on the way
+    k = 1
     while cursor!==P
-        # 2. move on up if possible,
+        # 2. move one up if possible,
         #    if not return P
         p = parent(cursor)
         isnothing(p) && break
+        k += 1
         # 3. If cursor is a right child, calculate A for the parent node
         #    and move one level up (continue)
         if isrightchild(cursor)
@@ -67,19 +72,24 @@ function traverse_left_right!(P::BinaryTree{Vector{Int}}, i, agg)
         cursor.val[i] = 1
     end
 
-    return P
+    return k
 end
 
 A!(P::BinaryTree{Vector{Int}}) = traverse_left_right!(P, 1, p->(p.left.val[1] + p.right.val[1] + 1))
 function C!(P::BinaryTree{Vector{Int}})
     A!(P)
-    traverse_left_right!(P, 2, p->(p.left.val[2] + p.right.val[2] + p.val[1]))
+    k = traverse_left_right!(P, 2, p->(p.left.val[2] + p.right.val[2] + p.val[1]))
+    return k
 end
 
 function treevalues!(P::BinaryTree{Vector{T}}) where {T}
-    C!(P)
-    V = map(x -> x.val, PreOrderDFS(P))
-    return ntuple(i -> getindex.(V, i), length(V[1]))
+    k = C!(P)
+    A = Vector{Int}(undef, k)
+    C = Vector{Int}(undef, k)
+    for (i,x) in enumerate(PreOrderDFS(P))
+        @inbounds A[i], C[i] = nodevalue(x)
+    end
+    return A,C
 end
 
 """
@@ -270,7 +280,7 @@ Return a binary tree.
 function fluctuating_coalescent(n, w=randn(n).^2; default_value=[0, 0], fuse=max)
     P = [BinaryTree(copy(default_value)) for _ in 1:n]
     ws = WeightedSampler(w)
-    # ij = (0,0)
+    d = ws.d
     while n  > 1
         i, j = sample(ws)
         l, r = P[i], P[j]
@@ -281,13 +291,12 @@ function fluctuating_coalescent(n, w=randn(n).^2; default_value=[0, 0], fuse=max
         r.parent = v
 
         P[i] = v
-        P[j] = P[n]
-        adjust_weight!(ws, i, fuse(ws.v[i], ws.v[j]))
-        shorten!(ws, 1)
+        adjust_weight!(ws, i, fuse(ws.heap[d+i], ws.heap[d+j]))
+        adjust_weight!(ws, j, 0.0)
         n -= 1
     end
 
-    return P[1]
+    return P[1], ws
 end
 
 end # MODULE

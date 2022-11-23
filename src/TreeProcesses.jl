@@ -129,7 +129,7 @@ end
   a list of moves (i,j) indicating individual at i 
   replaced the one at j.
 """
-function moran(n, T)
+function moran_moves(n, T)
     t = 1
     moves = Vector{Tuple{Int,Int}}(undef, T)
     v = collect(1:n)
@@ -230,7 +230,7 @@ end
 
   See also: @ref(`birth_death`)
 """
-moran2(n, T; kwargs...) = birthdeath(n, T, 1.0; kwargs...)
+moran(n, T; kwargs...) = birthdeath(n, T, 1.0; kwargs...)
 
 """
   Return a fully imbalanced binary tree of given height.
@@ -296,7 +296,7 @@ function fluctuating_coalescent(n, w=randn(n).^2; default_value=[0, 0], fuse=max
         n -= 1
     end
 
-    return P[1], ws
+    return P[1]
 end
 
 end # MODULE

@@ -9,7 +9,7 @@ Based on [`BinaryTrees.jl`](https://github.com/skleinbo/BinaryTrees.jl), which i
 
 The package is unregistered, therefore install it directly from GitHub.
 
-```julia
+```
 julia> ]add https://github.com/skleinbo/BinaryTrees.jl https://github.com/skleinbo/TreeProcesses.jl
 ```
 
@@ -17,7 +17,7 @@ julia> ]add https://github.com/skleinbo/BinaryTrees.jl https://github.com/sklein
 
 __Forward:__
 
-* `birth_death(n, T, d, b=1.0; N=0)`: Starting from `n` nodes, a randomly selected one splits with probability `b`. Independently, a node dies with probability `d`. Run for `T` timesteps (a birth plus death event are one timestep), or until `N` nodes are present unless `N==0` (default). Lineages that die out are automatically pruned, i.e. after sufficiently (`O(n^2)`) time steps, a most recent common ancestor will be found. Returns all surviving root nodes.
+* `birth_death(n, T, d, b=1.0; N=0)`: Starting from `n` nodes, a randomly selected one splits with probability `b`. Independently, a node dies with probability `d`. Run for `T` time steps (a birth plus death event are one time step), or until `N` nodes are present unless `N==0` (default). Lineages that die out are automatically pruned, i.e. after sufficiently many (`O(n^2)`) time steps, a most recent common ancestor will be found. Returns all surviving root nodes.
 * `maximally_balanced(n)`
 * `maximally_unbalanced(n)`
 * `moran(n,T)`: `birth_death` with b/d probabilities both equal to `1` to maintain constant population size.
@@ -31,16 +31,15 @@ Ancestral nodes' weights are computed from their children's weights by applying 
 
 ## Observables
 
-* `C!(t)`: Annotate each node of a tree with 
+* `C!(t)`: Annotate each node of a tree with
   * $A$: Number of nodes in the subtree, including itself.
   * $C$: Cumulative number of nodes in the subtree, i.e. $\sum A(i)$ for $i$ in the subtree, including the node itself.  
   
   __Note__: The `val` field of the nodes must be a `Vector` that can store `Int`s, which is the default.
 
-
 ## Example
 
-```julia
+```
 julia> using TreeProcesses
 
 julia> T = weighted_coalescent(2^4, rand(2^4))

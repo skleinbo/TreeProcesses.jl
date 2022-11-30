@@ -1,6 +1,6 @@
 module TreeProcesses
 
-export A!, C!, treevalues!, moran, moran2, birthdeath, fluctuating_coalescent, coalescent,
+export A!, C!, treevalues!, moran, moran2, birthdeath, weighted_coalescent, coalescent,
         maximally_balanced, maximally_unbalanced, to_mean_dataframe, yule
 
 import AbstractTrees
@@ -268,16 +268,16 @@ function maximally_balanced(height; default_value=[0,0])
 end
 
 """
-    fluctuating_coalescent(n, w=randn(n).^2; default_value=[0, 0], fuse=max)
+    weighted_coalescent(n, w=randn(n).^2; default_value=[0, 0], fuse=max)
 
-Simulate a "fluctating coalescent" process for n genes.
+Simulate a coalescent process for `n` genes, in which coalescing nodes are not selected uniformly, but according to the weight vector `w`.
 
 Starting nodes have recombination rates `w`, which upon coalescence are combined via `fuse`.
 Node values are set to `default_value`.
 
 Return a binary tree.
 """
-function fluctuating_coalescent(n, w=randn(n).^2; default_value=[0, 0], fuse=max)
+function weighted_coalescent(n, w=randn(n).^2; default_value=[0, 0], fuse=max)
     P = [BinaryTree(copy(default_value)) for _ in 1:n]
     ws = WeightedSampler(w)
     d = ws.d

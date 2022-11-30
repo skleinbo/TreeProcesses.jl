@@ -26,7 +26,7 @@ __Forward:__
 __Backward:__
 
 * `coalescent(n)`: Neutral coalescent process. Starting from `n` nodes, pick two at random and merge until only one is left.
-* `fluctuating_coalescent(n, w; fuse=max)`: Like `coalescent`, but each node is assigned the respective weight from the vector `w` with which it partakes in a coalescent event.
+* `weighted_coalescent(n, w; fuse=max)`: Like `coalescent`, but each node is assigned the respective weight from the vector `w` with which it partakes in a coalescent event.
 Ancestral nodes' weights are computed from their children's weights by applying `fuse`. The standard coalescent is recovered by choosing all weights equal and setting `fuse=first`.
 
 ## Observables
@@ -43,7 +43,7 @@ Ancestral nodes' weights are computed from their children's weights by applying 
 ```julia
 julia> using TreeProcesses
 
-julia> T = fluctuating_coalescent(2^4, rand(2^4))
+julia> T = weighted_coalescent(2^4, rand(2^4))
 BinaryTree{Vector{Int64}}([0, 0]) 11038476695863080329 with 2 children and no parent.
 
 # calculate and return A & C

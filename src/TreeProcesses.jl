@@ -6,14 +6,12 @@ export A!, C!, treevalues!, moran, moran2, birthdeath, weighted_coalescent, coal
 import AbstractTrees
 import AbstractTrees: children, descendleft, Leaves, nodevalue, parent, print_tree, PreOrderDFS, PostOrderDFS
 import Base: empty!
-using DataFrames
-using StatsBase
-
 using BinaryTrees
+using DataFrames
+import StatsBase: sample
+import WeightedSampling: WeightedSampler, adjust_weight!, sample as ws_sample, weight
 
 include("utilities.jl")
-include("WeightedSamplers.jl")
-import .WeightedSamplers: WeightedSampler, sample, adjust_weight!
 
 "Distance between a node `i` and its ancestor `j` on a tree."
 function dist(i, j)
@@ -282,7 +280,7 @@ function weighted_coalescent(n, w=randn(n).^2; default_value=[0, 0], fuse=max)
     ws = WeightedSampler(w)
     d = ws.d
     while n  > 1
-        i, j = sample(ws)
+        i, j = ws_sample(ws, 2; ordered=true)
         l, r = P[i], P[j]
         v = BinaryTree(copy(default_value))
         v.left = l

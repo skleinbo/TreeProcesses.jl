@@ -8,7 +8,7 @@ import AbstractTrees: children, descendleft, Leaves, nodevalue, parent, print_tr
 import Base: empty!
 using BinaryTrees
 using DataFrames
-import StatsBase: sample
+import StatsBase: mean, sample
 import WeightedSampling: WeightedSampler, adjust_weight!, sample as ws_sample, weight
 
 include("utilities.jl")
@@ -42,7 +42,7 @@ that nodes value field.
 
 Return number of nodes in tree.
 """
-function traverse_left_right!(P::BinaryTree{Vector{Int}}, i, agg)
+function traverse_left_right!(P::BinaryTree{Vector{T}}, i, agg) where T
     ## Setup
     # 1. find left-most leaf
     cursor = descendleft(P)
@@ -59,24 +59,26 @@ function traverse_left_right!(P::BinaryTree{Vector{Int}}, i, agg)
         k += 1
         # 3. If cursor is a right child, calculate A for the parent node
         #    and move one level up (continue)
-        if isrightchild(cursor)
+        if isrightchild(cursor) || length(children(p))==1
             p.val[i] = agg(p)
             cursor = p
             continue
         end
         cursor = p
-        # 4. traverse to the leftmost leaf of the right subtree and start over
-        cursor = descendleft(cursor.right)
-        cursor.val[i] = 1
+        # 4. traverse to the leftmost leaf of the right subtree if it exists, and start over
+        if !isnothing(cursor.right)
+            cursor = descendleft(cursor.right)
+            cursor.val[i] = 1
+        end
     end
 
     return k
 end
 
-A!(P::BinaryTree{Vector{Int}}) = traverse_left_right!(P, 1, p->(p.left.val[1] + p.right.val[1] + 1))
-function C!(P::BinaryTree{Vector{Int}})
+A!(P::BinaryTree{Vector{T}}) where T = traverse_left_right!(P, 1, p->sum(x->x.val[1], children(p)) + 1)
+function C!(P::BinaryTree{Vector{T}}) where T
     A!(P)
-    k = traverse_left_right!(P, 2, p->(p.left.val[2] + p.right.val[2] + p.val[1]))
+    k = traverse_left_right!(P, 2, p->sum(x->x.val[2], children(p)) + p.val[1])
     return k
 end
 

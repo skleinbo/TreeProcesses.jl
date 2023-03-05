@@ -1,7 +1,7 @@
 module TreeProcesses
 
 export A!, C!, treevalues!, moran, moran2, birthdeath, weighted_coalescent, coalescent,
-        maximally_balanced, maximally_unbalanced, to_mean_dataframe, yule
+        maximally_balanced, maximally_unbalanced, nichemodel, to_mean_dataframe, yule
 
 import AbstractTrees
 import AbstractTrees: children, descendleft, Leaves, nodevalue, parent, print_tree, PreOrderDFS, PostOrderDFS
@@ -297,6 +297,80 @@ function weighted_coalescent(n, w=randn(n).^2; default_value=[0, 0], fuse=max)
     end
 
     return P[1]
+end
+
+## -- Niche model from Goldenfeld (2020) -- ##
+
+e(r, R0) = r/(r+R0) # extinction probability
+r(n) = max(n, 0) # speciation rate
+
+function nichemodel(n, σ, R0=10.0; n0=1.0, default_value=Float64[0.0, 0.0, n0])
+    P = [BinaryTree(copy(default_value))] # root node
+    j = 1
+    nnodes = 1
+    ns = [n0] # niche sizes
+    rs = WeightedSampler([r(n0); zeros(Float64, 2n)]) # speciation rates
+    # es = [0.0] # extinction rates
+    while nnodes < n
+        # total rate is zero -> process halted -> exit
+        rs.heap[1]==0 && break
+        # sample a node speciate and calculate niche sizes, spec. rates, ext. prob. 
+        # of potential child nodes.
+        i = ws_sample(rs, 1)
+        nl, nr = ns[i] .+ ns[i]*σ*randn(2)
+        rl, rr = r(nl), r(nr)
+        el, er = e(rl, R0), e(rr, R0)
+
+        p = P[i]
+        
+        # for each child roll dice against ext. prob. 
+        # if it passes, attach to parent node
+        n_children = 0
+        if rand() > el
+            n_children += 1
+            j += 1
+            nnodes += 1
+            left = child!(p, copy(default_value), :left)
+            left.val[end] = nl
+            push!(ns, nl)
+            adjust_weight!(rs, j, rl)
+            # push!(es, el)
+            push!(P, left)
+        end
+        if nnodes<n && rand() > er
+            n_children += 1
+            location = n_children == 2 ? :right : :left
+            j += 1
+            nnodes += 1
+            right = child!(p, copy(default_value), location)
+            right.val[end] = nr
+            push!(ns, nr)
+            adjust_weight!(rs, j, rr)
+            # push!(es, er)
+            push!(P, right)
+        end
+        # after speciation (even if unsuccessful), a node is "dead"
+        adjust_weight!(rs, i, 0.0)
+        # pruning
+        while isempty(children(p))
+            pa = parent(p)
+            isnothing(pa) && break
+            nnodes -= 1
+            if p === pa.left 
+                ## make sure that a node remains
+                ## with a left child
+                pa.left = pa.right
+                pa.right = nothing
+            else
+                pa.right = nothing
+            end
+            p.parent = nothing
+            p = pa
+        end
+    end
+    # returning the number of nodes serves as a check whether the tree was constructed fully,
+    # or the process halted prematurely.
+    return P[1], nnodes
 end
 
 end # MODULE

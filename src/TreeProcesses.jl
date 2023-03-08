@@ -8,6 +8,7 @@ import AbstractTrees: children, descendleft, Leaves, nodevalue, parent, print_tr
 import Base: empty!
 using BinaryTrees
 using DataFrames
+import DataStructures: MutableBinaryMinHeap
 import StatsBase: mean, sample
 import WeightedSampling: WeightedSampler, adjust_weight!, sample as ws_sample, weight
 
@@ -301,56 +302,66 @@ end
 
 ## -- Niche model from Goldenfeld (2020) -- ##
 
-e(r, R0) = r/(r+R0) # extinction probability
-r(n) = max(n, 0) # speciation rate
+import Base: isequal, isless
 
-function nichemodel(n, σ, R0=10.0; n0=1.0, default_value=Float64[0.0, 0.0, n0])
+isequal(a::BinaryTree{Vector{Float64}}, b::BinaryTree{Vector{Float64}}) = a.val[end] == b.val[end]
+isless(a::BinaryTree{Vector{Float64}}, b::BinaryTree{Vector{Float64}}) = a.val[end] < b.val[end]
+
+e(r, R0) = r/(r+R0) # extinction probability
+r(n, ϵ=0.0) = ifelse(n>0, n, ϵ) # speciation rate
+
+"""
+    nichemodel(n, σ, R0=10.0; n0=1.0)
+
+Minimal model of a speciation process coupled to fluctuating ecological niches.
+
+Return root node and total number of nodes in the final tree. The latter can be used
+to check if the tree generation process completed or terminated prematurely.
+
+Reference: https://doi.org/10.1073/pnas.1915088117
+"""
+function nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=1.0, default_value=Float64[0.0, 0.0])
+    default_value = vcat(default_value, [n0, 0.0])
+    clock = 0.0
     P = [BinaryTree(copy(default_value))] # root node
-    j = 1
     nnodes = 1
-    ns = [n0] # niche sizes
-    rs = WeightedSampler([r(n0); zeros(Float64, 2n)]) # speciation rates
-    # es = [0.0] # extinction rates
+    spec_queue = MutableBinaryMinHeap(P)
     while nnodes < n
-        # total rate is zero -> process halted -> exit
-        rs.heap[1]==0 && break
-        # sample a node speciate and calculate niche sizes, spec. rates, ext. prob. 
+        # no more nodes ready to speciate -> exit
+        isempty(spec_queue) && break
+        # Sample a node, speciate, and calculate niche sizes, spec. rates, ext. prob. 
         # of potential child nodes.
-        i = ws_sample(rs, 1)
-        nl, nr = ns[i] .+ ns[i]*σ*randn(2)
-        rl, rr = r(nl), r(nr)
+        # Advance clock to spec. event.
+        p = pop!(spec_queue)
+        clock = p.val[end]
+        np = p.val[end-1]
+        nl, nr = np .+ np*σ*randn(2)
+        rl, rr = r(nl, ϵ), r(nr, ϵ)
+        tl = clock - log(rand())/rl
+        tr = clock - log(rand())/rr
         el, er = e(rl, R0), e(rr, R0)
 
-        p = P[i]
-        
         # for each child roll dice against ext. prob. 
         # if it passes, attach to parent node
         n_children = 0
         if rand() > el
             n_children += 1
-            j += 1
             nnodes += 1
             left = child!(p, copy(default_value), :left)
-            left.val[end] = nl
-            push!(ns, nl)
-            adjust_weight!(rs, j, rl)
-            # push!(es, el)
-            push!(P, left)
+            left.val[end-1] = nl
+            left.val[end] = tl
+            !isinf(tl) && push!(spec_queue, left)
         end
         if nnodes<n && rand() > er
             n_children += 1
             location = n_children == 2 ? :right : :left
-            j += 1
             nnodes += 1
             right = child!(p, copy(default_value), location)
-            right.val[end] = nr
-            push!(ns, nr)
-            adjust_weight!(rs, j, rr)
-            # push!(es, er)
-            push!(P, right)
+            right.val[end-1] = nr
+            right.val[end] = tr
+            !isinf(tr) && push!(spec_queue, right)
         end
-        # after speciation (even if unsuccessful), a node is "dead"
-        adjust_weight!(rs, i, 0.0)
+
         # pruning
         while isempty(children(p))
             pa = parent(p)

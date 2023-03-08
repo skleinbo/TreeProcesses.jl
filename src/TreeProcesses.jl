@@ -1,13 +1,14 @@
 module TreeProcesses
 
 export A!, C!, treevalues!, moran, moran2, birthdeath, weighted_coalescent, coalescent,
-        maximally_balanced, maximally_unbalanced, to_mean_dataframe, yule
+        maximally_balanced, maximally_unbalanced, nichemodel, to_mean_dataframe, yule
 
 import AbstractTrees
 import AbstractTrees: children, descendleft, Leaves, nodevalue, parent, print_tree, PreOrderDFS, PostOrderDFS
 import Base: empty!
 using BinaryTrees
 using DataFrames
+import DataStructures: MutableBinaryMinHeap
 import StatsBase: mean, sample
 import WeightedSampling: WeightedSampler, adjust_weight!, sample as ws_sample, weight
 
@@ -297,6 +298,90 @@ function weighted_coalescent(n, w=randn(n).^2; default_value=[0, 0], fuse=max)
     end
 
     return P[1]
+end
+
+## -- Niche model from Goldenfeld (2020) -- ##
+
+import Base: isequal, isless
+
+isequal(a::BinaryTree{Vector{Float64}}, b::BinaryTree{Vector{Float64}}) = a.val[end] == b.val[end]
+isless(a::BinaryTree{Vector{Float64}}, b::BinaryTree{Vector{Float64}}) = a.val[end] < b.val[end]
+
+e(r, R0) = r/(r+R0) # extinction probability
+r(n, ϵ=0.0) = ifelse(n>0, n, ϵ) # speciation rate
+
+"""
+    nichemodel(n, σ, R0=10.0; n0=1.0)
+
+Minimal model of a speciation process coupled to fluctuating ecological niches.
+
+Return root node and total number of nodes in the final tree. The latter can be used
+to check if the tree generation process completed or terminated prematurely.
+
+Reference: https://doi.org/10.1073/pnas.1915088117
+"""
+function nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=1.0, default_value=Float64[0.0, 0.0])
+    default_value = vcat(default_value, [n0, 0.0])
+    clock = 0.0
+    P = [BinaryTree(copy(default_value))] # root node
+    nnodes = 1
+    spec_queue = MutableBinaryMinHeap(P)
+    while nnodes < n
+        # no more nodes ready to speciate -> exit
+        isempty(spec_queue) && break
+        # Sample a node, speciate, and calculate niche sizes, spec. rates, ext. prob. 
+        # of potential child nodes.
+        # Advance clock to spec. event.
+        p = pop!(spec_queue)
+        clock = p.val[end]
+        np = p.val[end-1]
+        nl, nr = np .+ np*σ*randn(2)
+        rl, rr = r(nl, ϵ), r(nr, ϵ)
+        tl = clock - log(rand())/rl
+        tr = clock - log(rand())/rr
+        el, er = e(rl, R0), e(rr, R0)
+
+        # for each child roll dice against ext. prob. 
+        # if it passes, attach to parent node
+        n_children = 0
+        if rand() > el
+            n_children += 1
+            nnodes += 1
+            left = child!(p, copy(default_value), :left)
+            left.val[end-1] = nl
+            left.val[end] = tl
+            !isinf(tl) && push!(spec_queue, left)
+        end
+        if nnodes<n && rand() > er
+            n_children += 1
+            location = n_children == 2 ? :right : :left
+            nnodes += 1
+            right = child!(p, copy(default_value), location)
+            right.val[end-1] = nr
+            right.val[end] = tr
+            !isinf(tr) && push!(spec_queue, right)
+        end
+
+        # pruning
+        while isempty(children(p))
+            pa = parent(p)
+            isnothing(pa) && break
+            nnodes -= 1
+            if p === pa.left 
+                ## make sure that a node remains
+                ## with a left child
+                pa.left = pa.right
+                pa.right = nothing
+            else
+                pa.right = nothing
+            end
+            p.parent = nothing
+            p = pa
+        end
+    end
+    # returning the number of nodes serves as a check whether the tree was constructed fully,
+    # or the process halted prematurely.
+    return P[1], nnodes
 end
 
 end # MODULE

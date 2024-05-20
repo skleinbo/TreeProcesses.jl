@@ -7,7 +7,7 @@ Based on [`BinaryTrees.jl`](https://github.com/skleinbo/BinaryTrees.jl), which i
 
 ## Installation
 
-The package is unregistered, therefore install it directly from GitHub.
+The package is unregistered. Install it directly from GitHub.
 
 ```
 julia> ]add https://github.com/skleinbo/BinaryTrees.jl https://github.com/skleinbo/TreeProcesses.jl
@@ -31,7 +31,7 @@ Ancestral nodes' weights are computed from their children's weights by applying 
 
 ## Observables
 
-* `C!(t)`: Annotate each node of a tree with
+* `AC!(t)`: Annotate each node of a tree with
   * $A$: Number of nodes in the subtree, including itself.
   * $C$: Cumulative number of nodes in the subtree, i.e. $\sum A(i)$ for $i$ in the subtree, including the node itself.  
   
@@ -45,9 +45,9 @@ julia> using TreeProcesses
 julia> T = weighted_coalescent(2^4, rand(2^4))
 BinaryTree{Vector{Int64}}([0, 0]) 11038476695863080329 with 2 children and no parent.
 
-# calculate and return A & C
-julia> treevalues!(T)
-([31, 29, 27, 23, 21, 7, 3, 1, 1, 3  …  3, 1, 1, 1, 1, 3, 1, 1, 1, 1], [203, 171, 141, 109, 85, 17, 5, 1, 1, 5  …  5, 1, 1, 1, 1, 5, 1, 1, 1, 1])
+# calculate and return number of nodes, A & C
+julia> AC!(T)
+(31, [31, 29, 27, 23, 21, 7, 3, 1, 1, 3  …  3, 1, 1, 1, 1, 3, 1, 1, 1, 1], [203, 171, 141, 109, 85, 17, 5, 1, 1, 5  …  5, 1, 1, 1, 1, 5, 1, 1, 1, 1])
 
 # the tree has been annotated with the observable values
 julia> T

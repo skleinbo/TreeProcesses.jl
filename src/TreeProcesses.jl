@@ -1,6 +1,6 @@
 module TreeProcesses
 
-export A!, C!, treevalues!, moran, moran2, birthdeath, weighted_coalescent, coalescent,
+export  AC!, moran, moran2, birthdeath, weighted_coalescent, coalescent,
         maximally_balanced, maximally_unbalanced, nichemodel, to_mean_dataframe, yule
 
 import AbstractTrees
@@ -36,20 +36,20 @@ function empty!(P::BinaryTree{Vector{T}}) where {T}
 end
 
 """
-    traverse_left_right!(P::BinaryTree{Vector}, i, agg)
+    traverse_left_right!(P::BinaryTree, agg!; init!)
 
-Traverse tree "in-order". Apply function `agg` to a node whenever
-it is ascended to from the right. Store result in i-th component of 
-that nodes value field.
+Traverse tree "in-order". Apply function `agg!` to a node whenever
+it is ascended to from the right. Apply function `init!` to leafs. Default is to
+set each element of the leaf nodes' value field to `1`. 
 
 Return number of nodes in tree.
 """
-function traverse_left_right!(P::BinaryTree{Vector{T}}, i, agg) where T
+function traverse_left_right!(P::BinaryTree, agg!; init! = P->P.val.=1)
     ## Setup
     # 1. find left-most leaf
     cursor = descendleft(P)
     # 2. Set A=1
-    cursor.val[i] = 1
+    init!(cursor)
     ## Start loop
     ## count nodes on the way
     k = 1
@@ -62,7 +62,7 @@ function traverse_left_right!(P::BinaryTree{Vector{T}}, i, agg) where T
         # 3. If cursor is a right child, calculate A for the parent node
         #    and move one level up (continue)
         if isrightchild(cursor) || length(children(p))==1
-            p.val[i] = agg(p)
+            agg!(p)
             cursor = p
             continue
         end
@@ -70,41 +70,71 @@ function traverse_left_right!(P::BinaryTree{Vector{T}}, i, agg) where T
         # 4. traverse to the leftmost leaf of the right subtree if it exists, and start over
         if !isnothing(cursor.right)
             cursor = descendleft(cursor.right)
-            cursor.val[i] = 1
+            init!(cursor)
         end
     end
 
     return k
 end
 
-A!(P::BinaryTree{Vector{T}}) where T = traverse_left_right!(P, 1, p->sum(x->x.val[1], children(p)) + 1)
-function C!(P::BinaryTree{Vector{T}}) where T
-    A!(P)
-    k = traverse_left_right!(P, 2, p->sum(x->x.val[2], children(p)) + p.val[1])
-    return k
+## ---- Specific observables ---- ##
+
+function AC(p)
+    A = 0
+    C = 0
+    if !isnothing(p.left)
+        A += p.left.val[1]
+        C += p.left.val[2]
+    end
+    if !isnothing(p.right)
+        A += p.right.val[1]
+        C += p.right.val[2]
+    end
+    # C = sum(x->x.val[2], children(p)) + A
+    A+1, C+A+1
 end
 
-function treevalues!(P::BinaryTree{Vector{T}}) where {T}
-    k = C!(P)
-    A = Vector{Int}(undef, k)
-    C = Vector{Int}(undef, k)
-    for (i,x) in enumerate(PreOrderDFS(P))
-        @inbounds A[i], C[i] = nodevalue(x)
+function AC!(P::BinaryTree, slots=1:2)
+    A = Int[]
+    C = Int[]
+    function agg(P)
+        P.val[slots] .= AC(P)
+        push!(A, P.val[1])
+        push!(C, P.val[2])
     end
-    return A,C
+
+    k = traverse_left_right!(P, agg)
+    return k, A, C
 end
+
+# function treevalues!(P::BinaryTree)
+#     k = AC!(P)
+#     A = Vector{Int}(undef, k)
+#     C = Vector{Int}(undef, k)
+#     i = Ref(1)
+#     function agg(P)
+#         A[i[]] = P.val[1]
+#         C[i[]] = P.val[2]
+#         i[] += 1
+#     end
+#     traverse_left_right!(P, agg; init! = agg)
+
+#     return A,C
+# end
+
+## ---- Processes --- ##
 
 """
 Simulate the coalescent process for n genes.
 
 Return a directed graph with edges pointing towards the root.
 """
-function coalescent(n; default_value=[0,0])
-    P = [BinaryTree(copy(default_value)) for _ in 1:n] # start with n vertices; store A,C
+function coalescent(n; default_value=()->[0,0])
+    P = [BinaryTree(default_value()) for _ in 1:n] # start with n vertices; store A,C
     while n > 1
         i, j = sample(1:n, 2, replace=false, ordered=true) #sample two distinct vertices to coalesce
         @inbounds l, r = P[i], P[j]
-        v = BinaryTree(copy(default_value)) # newly added parental node
+        v = BinaryTree(default_value()) # newly added parental node
         v.left = l # connect sampled nodes to parental node
         v.right = r
         l.parent = v
@@ -151,14 +181,14 @@ end
   At each time step a bifurcation event happens at any of the
   current tips with equal probability.
 """
-function yule(n; default_value=[0,0])
-    P = [BinaryTree(copy(default_value))]
+function yule(n; default_value=()->[0,0])
+    P = [BinaryTree(default_value())]
     k = 1
     while length(P) - k + 1 < n
         i = rand(k:lastindex(P))
         v = P[i]
-        l = left!(v, copy(default_value))
-        r = right!(v, copy(default_value))
+        l = left!(v, default_value())
+        r = right!(v, default_value())
         append!(P, (l, r))
         P[i] = P[k]
 
@@ -181,8 +211,8 @@ end
 
   Return an ancestral tree, or a vector of trees if the process hasn't coalesced.
 """
-function birthdeath(n, T, d, b=1.0; N=0, default_value=[0,0])
-    P = [BinaryTree(copy(default_value)) for _ in 1:n]
+function birthdeath(n, T, d, b=1.0; N=0, default_value=()->[0,0])
+    P = [BinaryTree(default_value()) for _ in 1:n]
     t = 1
     N > 0 && sizehint!(P, N)
     k = 1
@@ -191,8 +221,8 @@ function birthdeath(n, T, d, b=1.0; N=0, default_value=[0,0])
         if rand() < b
             i = rand(k:lastindex(P))
             v = P[i]
-            l = left!(v, copy(default_value))
-            r = right!(v, copy(default_value))
+            l = left!(v, default_value())
+            r = right!(v, default_value())
             push!(P, r)
             P[i] = l
         end
@@ -237,13 +267,13 @@ moran(n, T; kwargs...) = birthdeath(n, T, 1.0; kwargs...)
 """
   Return a fully imbalanced binary tree of given height.
 """
-function maximally_unbalanced(height; default_value=[0,0])
-    P = BinaryTree(copy(default_value))
+function maximally_unbalanced(height; default_value=()->[0,0])
+    P = BinaryTree(default_value())
     h = 0
     attach_to = P
     while h < height
-        right!(attach_to, copy(default_value))
-        attach_to = left!(attach_to, copy(default_value))
+        right!(attach_to, default_value())
+        attach_to = left!(attach_to, default_value())
         h += 1
     end
 
@@ -253,15 +283,15 @@ end
 """
   Return a fully balanced binary tree of given height.
 """
-function maximally_balanced(height; default_value=[0,0])
-    P = [BinaryTree(copy(default_value))]
+function maximally_balanced(height; default_value=()->[0,0])
+    P = [BinaryTree(default_value())]
     root = P[1]
     h = 1
     n = 1
     while h < height
         attach_to = popfirst!(P)
-        push!(P, left!(attach_to, copy(default_value)))
-        push!(P, right!(attach_to, copy(default_value)))
+        push!(P, left!(attach_to, default_value()))
+        push!(P, right!(attach_to, default_value()))
 
         n += 2
         h = log2(n + 1)
@@ -279,14 +309,14 @@ Node values are set to `default_value`.
 
 Return a binary tree.
 """
-function weighted_coalescent(n, w=randn(n).^2; default_value=[0, 0], fuse=max)
-    P = [BinaryTree(copy(default_value)) for _ in 1:n]
+function weighted_coalescent(n, w=randn(n).^2; default_value::F, fuse=max) where F
+    P = [BinaryTree(default_value()) for _ in 1:n]
     ws = WeightedSampler(w)
     d = ws.d
     while n  > 1
         i, j = ws_sample(ws, 2; ordered=true)
         l, r = P[i], P[j]
-        v = BinaryTree(copy(default_value))
+        v = BinaryTree(default_value())
         v.left = l
         v.right = r
         l.parent = v
@@ -317,14 +347,14 @@ r(n, ϵ=0.0) = ifelse(n>0, n, ϵ) # speciation rate
 Minimal model of a speciation process coupled to fluctuating ecological niches.
 
 Return root node and total number of nodes in the final tree. The latter can be used
-to check if the tree generation process completed or terminated prematurely.
+to check if the tree generation process completed, or terminated prematurely.
 
 Reference: https://doi.org/10.1073/pnas.1915088117
 """
-function nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=1.0, default_value=Float64[0.0, 0.0])
-    default_value = vcat(default_value, [n0, 0.0])
+function nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=1.0, default_value=()->Float64[0.0, 0.0])
+    _default_value = () -> vcat(default_value(), [n0, 0.0])
     clock = 0.0
-    P = [BinaryTree(copy(default_value))] # root node
+    P = [BinaryTree(_default_value())] # root node
     nnodes = 1
     spec_queue = MutableBinaryMinHeap(P)
     while nnodes < n
@@ -348,7 +378,7 @@ function nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=1.0, default_value=Float64[0.0, 0
         if rand() > el
             n_children += 1
             nnodes += 1
-            left = child!(p, copy(default_value), :left)
+            left = child!(p, _default_value(), :left)
             left.val[end-1] = nl
             left.val[end] = tl
             !isinf(tl) && push!(spec_queue, left)
@@ -357,7 +387,7 @@ function nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=1.0, default_value=Float64[0.0, 0
             n_children += 1
             location = n_children == 2 ? :right : :left
             nnodes += 1
-            right = child!(p, copy(default_value), location)
+            right = child!(p, _default_value(), location)
             right.val[end-1] = nr
             right.val[end] = tr
             !isinf(tr) && push!(spec_queue, right)

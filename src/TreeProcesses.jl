@@ -102,8 +102,13 @@ function AC!(P::BinaryTree, slots=1:2)
         push!(A, P.val[1])
         push!(C, P.val[2])
     end
+    function init_leaf!(P)
+        P.val .= 1
+        push!(A, 1)
+        push!(C, 1)
+    end
 
-    k = traverse_left_right!(P, agg)
+    k = traverse_left_right!(P, agg; init! = init_leaf!)
     return k, A, C
 end
 

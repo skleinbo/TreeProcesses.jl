@@ -9,7 +9,8 @@ import Base: empty!
 using BinaryTrees
 using DataFrames
 import DataStructures: MutableBinaryMinHeap
-import StatsBase: mean, sample
+import Statistics: mean
+import StatsBase: sample
 import WeightedSampling: WeightedSampler, adjust_weight!, sample as ws_sample, weight
 
 include("utilities.jl")

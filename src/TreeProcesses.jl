@@ -1,10 +1,10 @@
 module TreeProcesses
 
-export  AC!, moran, moran2, birthdeath, weighted_coalescent, coalescent,
+export  ACD!, moran, moran2, birthdeath, weighted_coalescent, coalescent,
         maximally_balanced, maximally_unbalanced, nichemodel, to_mean_dataframe, yule
 
 import AbstractTrees
-import AbstractTrees: children, descendleft, Leaves, nodevalue, parent, print_tree, PreOrderDFS, PostOrderDFS
+using AbstractTrees: children, descendleft, Leaves, nodevalue, parent, print_tree, PreOrderDFS, PostOrderDFS
 import Base: empty!
 using BinaryTrees
 using DataFrames
@@ -79,53 +79,45 @@ end
 
 ## ---- Specific observables ---- ##
 
-function AC(p)
-    A = 0
-    C = 0
+function ACD(p)
+    A = 1
+    C = 1
+    D = 0
     if !isnothing(p.left)
         A += p.left.val[1]
         C += p.left.val[2]
+        D += p.left.val[3]
     end
     if !isnothing(p.right)
         A += p.right.val[1]
         C += p.right.val[2]
+        D += p.right.val[3]
     end
-    # C = sum(x->x.val[2], children(p)) + A
-    A+1, C+A+1
+    # D = sum(x->x.val[2], children(p)) + A
+    A, C+A, D+A-1
 end
 
-function AC!(P::BinaryTree, slots=1:2)
+function ACD!(P::BinaryTree, slots=1:3)
     A = Int[]
     C = Int[]
+    D = Int[]
     function agg(P)
-        P.val[slots] .= AC(P)
+        P.val[slots] .= ACD(P)
         push!(A, P.val[1])
         push!(C, P.val[2])
+        push!(D, P.val[3])
     end
     function init_leaf!(P)
-        P.val .= 1
+        P.val[slots] .= (1, 1, 0)
         push!(A, 1)
         push!(C, 1)
+        push!(D, 0)
     end
 
     k = traverse_left_right!(P, agg; init! = init_leaf!)
-    return k, A, C
+    return k, A, C, D
 end
 
-# function treevalues!(P::BinaryTree)
-#     k = AC!(P)
-#     A = Vector{Int}(undef, k)
-#     C = Vector{Int}(undef, k)
-#     i = Ref(1)
-#     function agg(P)
-#         A[i[]] = P.val[1]
-#         C[i[]] = P.val[2]
-#         i[] += 1
-#     end
-#     traverse_left_right!(P, agg; init! = agg)
-
-#     return A,C
-# end
 
 ## ---- Processes --- ##
 

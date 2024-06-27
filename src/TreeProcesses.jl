@@ -384,20 +384,48 @@ function nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=0.0, default_value=()->Float64[0.
         end
 
         # pruning
-        while isempty(children(p))
-            pa = parent(p)
-            isnothing(pa) && break
-            nnodes -= 1
-            if p === pa.left 
-                ## make sure that a node remains
-                ## with a left child
-                pa.left = pa.right
+        pa = parent(p)
+
+        if n_children == 0
+            isnothing(pa) && continue
+            sib = sibling(p)
+            papa = parent(pa)
+            if isnothing(papa)
+                # pa was the root node
+                # replace with sibling
+                pa.left = nothing
                 pa.right = nothing
-            else
-                pa.right = nothing
+                sib.parent = nothing
+                P[1] = sib
+                continue
             end
-            p.parent = nothing
-            p = pa
+            if isleftchild(pa)
+                papa.left = sib
+            else
+                papa.right = sib
+            end
+            sib.parent = papa
+            pa.left = nothing
+            pa.right = nothing
+            pa.parent = nothing
+            # nnodes -= 2
+        end
+
+        if n_children == 1
+            chld = p.left
+            if isnothing(pa)
+                P[1] = chld
+                chld.parent = nothing
+            end
+            chld.parent = pa
+            if isleftchild(p)
+                pa.left = chld
+            elseif isrightchild(p)
+                pa.right = chld
+                chld.parent = pa
+            end
+            p.left = p.right = p.parent = nothing
+            # nnodes -= 1
         end
     end
     # returning the number of nodes serves as a check whether the tree was constructed fully,

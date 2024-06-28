@@ -8,10 +8,10 @@ using AbstractTrees: children, descendleft, Leaves, nodevalue, parent, print_tre
 import Base: empty!
 using BinaryTrees
 using DataFrames
-import DataStructures: MutableBinaryMinHeap
-import Statistics: mean
-import StatsBase: sample
-import WeightedSampling: WeightedSampler, adjust_weight!, sample as ws_sample, weight
+using DataStructures: PriorityQueue, dequeue!, enqueue!
+using Statistics: mean
+using StatsBase: sample
+using WeightedSampling: WeightedSampler, adjust_weight!, sample as ws_sample, weight
 
 include("utilities.jl")
 
@@ -264,7 +264,7 @@ moran(n, T; kwargs...) = birthdeath(n, T, 1.0; kwargs...)
 """
   Return a fully imbalanced binary tree of given height.
 """
-function maximally_unbalanced(height; default_value=()->[0,0])
+function maximally_unbalanced(height; default_value=()->[0,0,0])
     P = BinaryTree(default_value())
     h = 0
     attach_to = P
@@ -280,7 +280,7 @@ end
 """
   Return a fully balanced binary tree of given height.
 """
-function maximally_balanced(height; default_value=()->[0,0])
+function maximally_balanced(height; default_value=()->[0,0,0])
     P = [BinaryTree(default_value())]
     root = P[1]
     h = 1
@@ -306,26 +306,31 @@ Node values are set to `default_value`.
 
 Return a binary tree.
 """
-function weighted_coalescent(n, w=randn(n).^2; default_value::F, fuse=max) where F
+function weighted_coalescent(n, w=randn(n).^2; default_value::F = ()->Float64[0,0,0,0], fuse=max, stopat=1) where F
     P = [BinaryTree(default_value()) for _ in 1:n]
+    mask = trues(n)
     ws = WeightedSampler(w)
     d = ws.d
-    while n  > 1
+    while n  > stopat
         i, j = ws_sample(ws, 2; ordered=true)
         l, r = P[i], P[j]
         v = BinaryTree(default_value())
+        v.val[end-1] = max(l.val[end], r.val[end])
         v.left = l
         v.right = r
         l.parent = v
         r.parent = v
-
+        
         P[i] = v
-        adjust_weight!(ws, i, fuse(ws.heap[d+i], ws.heap[d+j]))
+        new_weight = fuse(ws.heap[d+i], ws.heap[d+j])
+        adjust_weight!(ws, i, new_weight)
         adjust_weight!(ws, j, 0.0)
+        v.val[end] = new_weight
         n -= 1
+        mask[j] = false
     end
 
-    return P[1]
+    return P[mask]
 end
 
 ## -- Niche model from Goldenfeld (2020) -- ##

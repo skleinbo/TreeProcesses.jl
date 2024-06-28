@@ -335,11 +335,6 @@ end
 
 ## -- Niche model from Goldenfeld (2020) -- ##
 
-import Base: isequal, isless
-
-isequal(a::BinaryTree{Vector{Float64}}, b::BinaryTree{Vector{Float64}}) = a.val[end] == b.val[end]
-isless(a::BinaryTree{Vector{Float64}}, b::BinaryTree{Vector{Float64}}) = a.val[end] < b.val[end]
-
 e(r, R0) = r/(r+R0) # extinction probability
 r(n, ϵ=0.0) = ifelse(n>0, n, ϵ) # speciation rate
 
@@ -353,19 +348,17 @@ to check if the tree generation process completed, or terminated prematurely.
 
 Reference: https://doi.org/10.1073/pnas.1915088117
 """
-function nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=1.0, default_value=()->Float64[0.0, 0.0])
+function nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=0.0, default_value=()->Float64[0.0, 0.0])
     _default_value = () -> vcat(default_value(), [n0, 0.0])
     clock = 0.0
     P = [BinaryTree(_default_value())] # root node
     nnodes = 1
-    spec_queue = MutableBinaryMinHeap(P)
-    while nnodes < n
-        # no more nodes ready to speciate -> exit
-        isempty(spec_queue) && break
+    spec_queue = PriorityQueue(Base.Order.Forward, P[1] => 0.0)
+    while nnodes < n && !isempty(spec_queue)
         # Sample a node, speciate, and calculate niche sizes, spec. rates, ext. prob. 
         # of potential child nodes.
         # Advance clock to spec. event.
-        p = pop!(spec_queue)
+        p = dequeue!(spec_queue)
         clock = p.val[end]
         np = p.val[end-1]
         nl, nr = np .+ np*σ*randn(2)
@@ -383,7 +376,7 @@ function nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=1.0, default_value=()->Float64[0.
             left = child!(p, _default_value(), :left)
             left.val[end-1] = nl
             left.val[end] = tl
-            !isinf(tl) && push!(spec_queue, left)
+            !isinf(tl) && enqueue!(spec_queue, left => tl)
         end
         if nnodes<n && rand() > er
             n_children += 1
@@ -392,24 +385,52 @@ function nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=1.0, default_value=()->Float64[0.
             right = child!(p, _default_value(), location)
             right.val[end-1] = nr
             right.val[end] = tr
-            !isinf(tr) && push!(spec_queue, right)
+            !isinf(tr) && enqueue!(spec_queue, right => tr)
         end
 
         # pruning
-        while isempty(children(p))
-            pa = parent(p)
-            isnothing(pa) && break
-            nnodes -= 1
-            if p === pa.left 
-                ## make sure that a node remains
-                ## with a left child
-                pa.left = pa.right
+        pa = parent(p)
+
+        if n_children == 0
+            isnothing(pa) && continue
+            sib = sibling(p)
+            papa = parent(pa)
+            if isnothing(papa)
+                # pa was the root node
+                # replace with sibling
+                pa.left = nothing
                 pa.right = nothing
-            else
-                pa.right = nothing
+                sib.parent = nothing
+                P[1] = sib
+                continue
             end
-            p.parent = nothing
-            p = pa
+            if isleftchild(pa)
+                papa.left = sib
+            else
+                papa.right = sib
+            end
+            sib.parent = papa
+            pa.left = nothing
+            pa.right = nothing
+            pa.parent = nothing
+            # nnodes -= 2
+        end
+
+        if n_children == 1
+            chld = p.left
+            if isnothing(pa)
+                P[1] = chld
+                chld.parent = nothing
+            end
+            chld.parent = pa
+            if isleftchild(p)
+                pa.left = chld
+            elseif isrightchild(p)
+                pa.right = chld
+                chld.parent = pa
+            end
+            p.left = p.right = p.parent = nothing
+            # nnodes -= 1
         end
     end
     # returning the number of nodes serves as a check whether the tree was constructed fully,

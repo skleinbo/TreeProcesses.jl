@@ -81,7 +81,7 @@ end
 
 function ACD(p)
     A = 1
-    C = 1
+    C = 0
     D = 0
     if !isnothing(p.left)
         A += p.left.val[1]

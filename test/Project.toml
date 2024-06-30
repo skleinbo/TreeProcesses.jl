@@ -1,2 +1,6 @@
 [deps]
+BinaryTrees = "b5b2f71e-4d2a-452d-9d2b-18613792c179"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+BinaryTrees = "0.2"

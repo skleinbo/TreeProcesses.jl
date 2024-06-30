@@ -4,8 +4,9 @@ export  ACD!, moran, moran2, birthdeath, preferential_coalescent, coalescent,
         maximally_balanced, maximally_unbalanced, nichemodel, to_mean_dataframe, yule
 
 import AbstractTrees
-using AbstractTrees: children, descendleft, Leaves, nodevalue, parent, print_tree, PreOrderDFS, PostOrderDFS
 import Base: empty!
+
+using AbstractTrees: children, descendleft, Leaves, nodevalue, parent, print_tree, PreOrderDFS, PostOrderDFS
 using BinaryTrees
 using DataFrames
 using DataStructures: PriorityQueue, dequeue!, enqueue!
@@ -37,48 +38,28 @@ function empty!(P::BinaryTree{Vector{T}}) where {T}
     for v::BinaryTree{Vector{T}} in PreOrderDFS(P)
         v.val::Vector{T} .= zero(T)
     end
-    nothing
+    return nothing
 end
 
 """
-    traverse_left_right!(P::BinaryTree, agg!; init!)
+    traverse_post_order!(P::BinaryTree, agg!; init!)
 
-Traverse tree "in-order". Apply function `agg!` to a node whenever
+Traverse tree in post-order. Apply function `agg!` to a node whenever
 it is ascended to from the right. Apply function `init!` to leafs. Default is to
 set each element of the leaf nodes' value field to `1`. 
 
 Return number of nodes in tree.
 """
-function traverse_left_right!(P::BinaryTree, agg!; init! = P->P.val.=1)
-    ## Setup
-    # 1. find left-most leaf
-    cursor = descendleft(P)
-    # 2. Set A=1
-    init!(cursor)
-    ## Start loop
-    ## count nodes on the way
-    k = 1
-    while cursor!==P
-        # 2. move one up if possible,
-        #    if not return P
-        p = parent(cursor)
-        isnothing(p) && break
-        k += 1
-        # 3. If cursor is a right child, calculate A for the parent node
-        #    and move one level up (continue)
-        if isrightchild(cursor) || length(children(p))==1
+function traverse_post_order!(P::BinaryTree, agg!; init! = P->P.val.=1)
+    k = 0
+    for p in P
+        if isleaf(p)
+            init!(p)
+        else
             agg!(p)
-            cursor = p
-            continue
         end
-        cursor = p
-        # 4. traverse to the leftmost leaf of the right subtree if it exists, and start over
-        if !isnothing(cursor.right)
-            cursor = descendleft(cursor.right)
-            init!(cursor)
-        end
+        k += 1
     end
-
     return k
 end
 
@@ -118,7 +99,7 @@ function ACD!(P::BinaryTree, slots=1:3)
         push!(D, 0)
     end
 
-    k = traverse_left_right!(P, agg; init! = init_leaf!)
+    k = traverse_post_order!(P, agg; init! = init_leaf!)
     return k, A, C, D
 end
 

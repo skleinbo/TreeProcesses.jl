@@ -111,12 +111,12 @@ Simulate the coalescent process for n genes.
 
 Return a directed graph with edges pointing towards the root.
 """
-function coalescent(n; default_value=()->DefaultNodeValue([0,0,0]))
-    P = [BinaryTree(default_value()) for _ in 1:n] # start with n vertices; store A,C
+function coalescent(n; nodevalue=()->DefaultNodeValue([0,0,0]))
+    P = [BinaryTree(nodevalue()) for _ in 1:n] # start with n vertices; store A,C
     while n > 1
         i, j = sample(1:n, 2, replace=false, ordered=true) #sample two distinct vertices to coalesce
         @inbounds l, r = P[i], P[j]
-        v = BinaryTree(default_value()) # newly added parental node
+        v = BinaryTree(nodevalue()) # newly added parental node
         v.left = l # connect sampled nodes to parental node
         v.right = r
         l.parent = v
@@ -163,14 +163,14 @@ end
   At each time step a bifurcation event happens at any of the
   current tips with equal probability.
 """
-function yule(n; default_value=()->DefaultNodeValue([0,0,0]))
-    P = [BinaryTree(default_value())]
+function yule(n; nodevalue=()->DefaultNodeValue([0,0,0]))
+    P = [BinaryTree(nodevalue())]
     k = 1
     while length(P) - k + 1 < n
         i = rand(k:lastindex(P))
         v = P[i]
-        l = left!(v, default_value())
-        r = right!(v, default_value())
+        l = left!(v, nodevalue())
+        r = right!(v, nodevalue())
         append!(P, (l, r))
         P[i] = P[k]
 
@@ -193,8 +193,8 @@ end
 
   Return an ancestral tree, or a vector of trees if the process hasn't coalesced.
 """
-function birthdeath(n, T, d, b=1.0; N=0, default_value=()->DefaultNodeValue([0,0,0]))
-    P = [BinaryTree(default_value()) for _ in 1:n]
+function birthdeath(n, T, d, b=1.0; N=0, nodevalue=()->DefaultNodeValue([0,0,0]))
+    P = [BinaryTree(nodevalue()) for _ in 1:n]
     t = 1
     N > 0 && sizehint!(P, N)
     k = 1
@@ -203,8 +203,8 @@ function birthdeath(n, T, d, b=1.0; N=0, default_value=()->DefaultNodeValue([0,0
         if rand() < b
             i = rand(k:lastindex(P))
             v = P[i]
-            l = left!(v, default_value())
-            r = right!(v, default_value())
+            l = left!(v, nodevalue())
+            r = right!(v, nodevalue())
             push!(P, r)
             P[i] = l
         end
@@ -249,13 +249,13 @@ moran(n, T; kwargs...) = birthdeath(n, T, 1.0; kwargs...)
 """
   Return a fully imbalanced binary tree of given height.
 """
-function maximally_unbalanced(height; default_value=()->DefaultNodeValue([0,0,0]))
-    P = BinaryTree(default_value())
+function maximally_unbalanced(height; nodevalue=()->DefaultNodeValue([0,0,0]))
+    P = BinaryTree(nodevalue())
     h = 0
     attach_to = P
     while h < height
-        right!(attach_to, default_value())
-        attach_to = left!(attach_to, default_value())
+        right!(attach_to, nodevalue())
+        attach_to = left!(attach_to, nodevalue())
         h += 1
     end
 
@@ -265,15 +265,15 @@ end
 """
   Return a fully balanced binary tree of given height.
 """
-function maximally_balanced(height; default_value=()->DefaultNodeValue([0,0,0]))
-    P = [BinaryTree(default_value())]
+function maximally_balanced(height; nodevalue=()->DefaultNodeValue([0,0,0]))
+    P = [BinaryTree(nodevalue())]
     root = P[1]
     h = 1
     n = 1
     while h < height
         attach_to = popfirst!(P)
-        push!(P, left!(attach_to, default_value()))
-        push!(P, right!(attach_to, default_value()))
+        push!(P, left!(attach_to, nodevalue()))
+        push!(P, right!(attach_to, nodevalue()))
 
         n += 2
         h = log2(n + 1)
@@ -290,12 +290,12 @@ PCNodeValue(obs) = PCNodeValue(0.0, 0 , obs)
 PCNodeValue() = PCNodeValue(MVector(0,0,0))
 
 """
-    preferential_coalescent(n, w=randn(n).^2; default_value=[0, 0], fuse=max)
+    preferential_coalescent(n, w=randn(n).^2; nodevalue=[0, 0], fuse=max)
 
 Simulate a coalescent process for `n` genes, in which coalescing nodes are not selected uniformly, but according to the weight vector `w`.
 
 Starting nodes have recombination rates `w`, which upon coalescence are combined via `fuse`.
-Node values are set to `default_value`.
+Node values are set to `nodevalue`.
 
 Return a binary tree.
 """

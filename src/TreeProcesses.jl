@@ -4,7 +4,7 @@ export  ACD!, moran, moran2, birthdeath, preferential_coalescent, coalescent,
         maximally_balanced, maximally_unbalanced, nichemodel, to_mean_dataframe, yule
 
 import AbstractTrees
-import Base: empty!
+import Base: empty!, show
 
 using AbstractTrees: children, descendleft, Leaves, nodevalue, parent, print_tree, PreOrderDFS, PostOrderDFS
 using BinaryTrees
@@ -17,7 +17,20 @@ using WeightedSampling: WeightedSampler, adjust_weight!, sample as ws_sample, we
 
 include("utilities.jl")
 
-mutable struct DefaultNodeValue{T}
+abstract type AbstractNodeValue end
+
+function show(io::IO, node::AbstractNodeValue)
+    print(io, "(")
+    first = true
+    for field in propertynames(node)
+        !first && print(io, ", ")
+        first = false
+        print(io, "$field=", getproperty(node, field))
+    end
+    print(io, ")")
+end
+
+mutable struct DefaultNodeValue{T}<:AbstractNodeValue
     observables::T
 end
 
@@ -32,14 +45,14 @@ function dist(i, j)
     return d
 end
 
-## Phylogenetic Observables
-
 function empty!(P::BinaryTree{Vector{T}}) where {T}
     for v::BinaryTree{Vector{T}} in PreOrderDFS(P)
         v.val::Vector{T} .= zero(T)
     end
     return nothing
 end
+
+## Phylogenetic Observables
 
 """
     traverse_post_order!(P::BinaryTree, agg!; init!)
@@ -281,16 +294,17 @@ function maximally_balanced(height; nodevalue=()->DefaultNodeValue([0,0,0]))
     return root
 end
 
-mutable struct PCNodeValue{T}
+mutable struct PCNodeValue{T}<:AbstractNodeValue
     w::Float64
     t::Int
     observables::T
 end
+PCNodeValue(w::Float64, t::Int) = PCNodeValue(w, t, MVector(0,0,0))
 PCNodeValue(obs) = PCNodeValue(0.0, 0 , obs)
 PCNodeValue() = PCNodeValue(MVector(0,0,0))
 
 """
-    preferential_coalescent(n, w=randn(n).^2; nodevalue=[0, 0], fuse=max)
+    preferential_coalescent(n, w=ones(n); [fuse=max, stopat=1, nodevalue])
 
 Simulate a coalescent process for `n` genes, in which coalescing nodes are not selected uniformly, but according to the weight vector `w`.
 
@@ -298,9 +312,15 @@ Starting nodes have recombination rates `w`, which upon coalescence are combined
 Node values are set to `nodevalue`.
 
 Return a binary tree.
+
+`nodevalue` needs to return a struct that has at least the fields `w::Float64` to store the coalescence rate of
+a node, and `t::Int` to save the timestep at which it was created. The starting nodes have `t=0`.
+The default is `PCNodeValue()`.
 """
 function preferential_coalescent(n, w=ones(n); fuse=max, stopat=1, nodevalue=()->PCNodeValue())
-    P = [BinaryTree(nodevalue()) for _ in 1:n]
+    P = map(1:n) do i 
+        BinaryTree(nodevalue())
+    end
     mask = trues(n)
     ws = WeightedSampler(w)
     d = ws.d
@@ -330,7 +350,7 @@ end
 
 ## -- Niche model from Goldenfeld (2020) -- ##
 
-mutable struct NicheNodeValue{T}
+mutable struct NicheNodeValue{T}<:AbstractNodeValue
     n::Float64
     t::Float64
     observables::T
@@ -342,12 +362,15 @@ e(r, R0) = r/(r+R0) # extinction probability
 r(n, ϵ=0.0) = ifelse(n>0, n, ϵ) # speciation rate
 
 """
-    nichemodel(n, σ, R0=10.0; n0=1.0)
+    nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=0.0, nodevalue=()->NicheNodeValue())
 
 Minimal model of a speciation process coupled to fluctuating ecological niches.
 
 Return root node, number of generated nodes and number of nodes in the final tree after pruning.
 The middle value can be used to check if the tree generation process completed, or terminated prematurely.
+
+`nodevalue` needs to return a struct that has at least the fields `n::Float64` to store the niche size of
+a node, and `t::Float64` to save the time at which it was created. The default is `NicheNodeValue()`.
 
 Reference: https://doi.org/10.1073/pnas.1915088117
 """

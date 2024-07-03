@@ -16,6 +16,7 @@ WeightedSampling = "af319372-f9cb-496b-b431-7c8e6f770e40"
 
 [compat]
 AbstractTrees = "0.4"
+BinaryTrees = "0.2"
 DataFrames = "1"
 StatsBase = "0.33"
 WeightedSampling = "0.1"

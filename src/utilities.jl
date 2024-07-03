@@ -1,7 +1,8 @@
 import Statistics
 
 """
-  Combine vectors with values for A and C into a dataframe, averaging C/A for every A.
+  Combine vectors with values for A,C and D into a dataframe,
+  averaging C/A, D/A for every unique A.
 """
 function to_mean_dataframe(A, C, D)
     df = DataFrame(; A, C, D)

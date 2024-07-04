@@ -1,7 +1,7 @@
 name = "TreeProcesses"
 uuid = "fe9c5e76-98a0-40b3-a46c-727041eeba4e"
 author = "Stephan Kleinboelting <s.kleinboelting@gmail.com>"
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
@@ -18,5 +18,5 @@ WeightedSampling = "af319372-f9cb-496b-b431-7c8e6f770e40"
 AbstractTrees = "0.4"
 BinaryTrees = "0.2"
 DataFrames = "1"
-StatsBase = "0.33"
+StatsBase = "0.33, 0.34"
 WeightedSampling = "0.1"

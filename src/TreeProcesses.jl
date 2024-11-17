@@ -319,7 +319,9 @@ The default is `PCNodeValue()`.
 """
 function preferential_coalescent(n, w=ones(n); fuse=max, stopat=1, nodevalue=()->PCNodeValue())
     P = map(1:n) do i 
-        BinaryTree(nodevalue())
+        q = BinaryTree(nodevalue())
+        q.val.w = w[i]
+        q
     end
     mask = trues(n)
     ws = WeightedSampler(w)

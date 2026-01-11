@@ -364,26 +364,33 @@ e(r, R0) = r/(r+R0) # extinction probability
 r(n, ϵ=0.0) = ifelse(n>0, n, ϵ) # speciation rate
 
 """
-    nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=0.0, nodevalue=()->NicheNodeValue())
+    nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=0.0, excludeprunes=false, nodevalue=()->NicheNodeValue())
 
 Minimal model of a speciation process coupled to fluctuating ecological niches.
 
 Return root node, number of generated nodes and number of nodes in the final tree after pruning.
 The middle value can be used to check if the tree generation process completed, or terminated prematurely.
 
+If `excludepruned` is `true`, the process stops when the number of generated nodes minus the number of pruned 
+nodes first exceeds `n`. Otherwise it halts when `n` nodes have been generated. If `true`, use the last return
+value to check for full tree generation, otherwise the second.
+
 `nodevalue` needs to return a struct that has at least the fields `n::Float64` to store the niche size of
 a node, and `t::Float64` to save the time at which it was created. The default is `NicheNodeValue()`.
 
 Reference: https://doi.org/10.1073/pnas.1915088117
 """
-function nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=0.0, nodevalue=()->NicheNodeValue())
+function nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=0.0, excludepruned=false, nodevalue=()->NicheNodeValue())
+    maxiter = 10n
+    iter = 0
     clock = 0.0
     P = BinaryTree(nodevalue()) # root node
     P.val.n = n0
     nnodes = 1
     npruned = 0
+    n_check = nnodes - npruned
     spec_queue = PriorityQueue(Base.Order.Forward, P => 0.0)
-    while nnodes < n && !isempty(spec_queue)
+    while iter < maxiter && n_check < n && !isempty(spec_queue)
         # Sample a node, speciate, and calculate niche sizes, spec. rates, ext. prob. 
         # of potential child nodes.
         # Advance clock to spec. event.
@@ -408,7 +415,8 @@ function nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=0.0, nodevalue=()->NicheNodeValue
             left.val.t = tl
             !isinf(tl) && enqueue!(spec_queue, left => tl)
         end
-        if nnodes<n && rand() > er
+        # n_check + n_children == n && break
+        if rand() > er
             n_children += 1
             location = n_children == 2 ? :right : :left
             nnodes += 1
@@ -421,8 +429,7 @@ function nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=0.0, nodevalue=()->NicheNodeValue
         # pruning
         pa = parent(p)
 
-        if n_children == 0
-            isnothing(pa) && continue
+        if n_children == 0 && !isnothing(pa)
             sib = sibling(p)
             papa = parent(pa)
             if isnothing(papa)
@@ -432,17 +439,17 @@ function nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=0.0, nodevalue=()->NicheNodeValue
                 pa.right = nothing
                 sib.parent = nothing
                 P = sib
-                continue
-            end
-            if isleftchild(pa)
-                papa.left = sib
             else
-                papa.right = sib
+                if isleftchild(pa)
+                    papa.left = sib
+                else
+                    papa.right = sib
+                end
+                sib.parent = papa
+                pa.left = nothing
+                pa.right = nothing
+                pa.parent = nothing
             end
-            sib.parent = papa
-            pa.left = nothing
-            pa.right = nothing
-            pa.parent = nothing
             npruned += 2
         end
 
@@ -451,20 +458,26 @@ function nichemodel(n, σ, R0=10.0; n0=1.0, ϵ=0.0, nodevalue=()->NicheNodeValue
             if isnothing(pa)
                 P = chld
                 chld.parent = nothing
-            end
-            chld.parent = pa
-            if isleftchild(p)
-                pa.left = chld
-            elseif isrightchild(p)
-                pa.right = chld
+            else
                 chld.parent = pa
+                if isleftchild(p)
+                    pa.left = chld
+                elseif isrightchild(p)
+                    pa.right = chld
+                    chld.parent = pa
+                end
             end
             p.left = p.right = p.parent = nothing
             npruned += 1
         end
+
+        n_check = excludepruned ? nnodes-npruned : nnodes
+        iter += 1
     end
     # returning the number of nodes serves as a check whether the tree was constructed fully,
     # or the process halted prematurely.
+    # @assert nnodes-npruned == n
+    iter >= maxiter && @warn "Maximum number of iterations reached"
     return P, nnodes, nnodes-npruned
 end
 
